@@ -214,6 +214,42 @@ class Memory:
             ).fetchall()
         return [r["fact"] for r in rows]
 
+    def list_facts_with_id(self, limit: int = 50) -> list[dict]:
+        """Same as list_facts but also returns id for edit/delete operations."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT id, fact FROM facts WHERE chat_id=? ORDER BY id ASC LIMIT ?",
+                (self.chat_id, limit),
+            ).fetchall()
+        return [{"id": r["id"], "fact": r["fact"]} for r in rows]
+
+    def delete_fact(self, fact_id: int) -> bool:
+        """Delete a fact by id. True if found and deleted."""
+        with self._conn() as c:
+            cur = c.execute(
+                "DELETE FROM facts WHERE id=? AND chat_id=?",
+                (fact_id, self.chat_id),
+            )
+            return cur.rowcount > 0
+
+    def update_fact(self, fact_id: int, new_text: str) -> bool:
+        """Replace the text of a fact. True if found and updated."""
+        with self._conn() as c:
+            cur = c.execute(
+                "UPDATE facts SET fact=? WHERE id=? AND chat_id=?",
+                (new_text, fact_id, self.chat_id),
+            )
+            return cur.rowcount > 0
+
+    def delete_event(self, event_id: int) -> bool:
+        """Delete an event by id."""
+        with self._conn() as c:
+            cur = c.execute(
+                "DELETE FROM events WHERE id=? AND chat_id=?",
+                (event_id, self.chat_id),
+            )
+            return cur.rowcount > 0
+
     # ---- autonomous ----
 
     def log_autonomous(self, message: str) -> int:
@@ -374,6 +410,18 @@ class AsyncMemory:
 
     async def list_facts(self, limit: int = 50) -> list[str]:
         return await asyncio.to_thread(self._m.list_facts, limit)
+
+    async def list_facts_with_id(self, limit: int = 50) -> list[dict]:
+        return await asyncio.to_thread(self._m.list_facts_with_id, limit)
+
+    async def delete_fact(self, fact_id: int) -> bool:
+        return await asyncio.to_thread(self._m.delete_fact, fact_id)
+
+    async def update_fact(self, fact_id: int, new_text: str) -> bool:
+        return await asyncio.to_thread(self._m.update_fact, fact_id, new_text)
+
+    async def delete_event(self, event_id: int) -> bool:
+        return await asyncio.to_thread(self._m.delete_event, event_id)
 
     async def save_fact(self, fact: str) -> int:
         return await asyncio.to_thread(self._m.save_fact, fact)

@@ -84,9 +84,12 @@ HELP_TEXT = """📖 *Available commands*
 /help — this message
 
 *Memory*
-/memory — show what the bot knows about you (exchanges, photos today, facts, events)
+/memory — show what the bot knows about you (with id for each entry)
 /fact <text> — save a durable fact about you (always in the prompt)
 /event <text> — save a recent event (stays in the prompt for 7 days)
+/forgetfact <id> — delete a fact (get id via /memory)
+/forgetevent <id> — delete an event (get id via /memory)
+/editfact <id> <text> — replace a fact's text
 
 *Photo generation*
 /pic <prompt> — generate a photo
@@ -297,11 +300,11 @@ async def on_clearref_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def on_memory_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/memory: show a summary of what the bot knows about you."""
+    """/memory: show a summary of what the bot knows about you, with ids."""
     if not _authorized(update):
         return
     amem = _get_memory(context)
-    facts = await amem.list_facts(limit=50)
+    facts = await amem.list_facts_with_id(limit=50)
     events = await amem.recent_events(days=7, limit=50)
     count = await amem.get_interaction_count()
     pics_today = await amem.pic_count_today()
@@ -309,11 +312,76 @@ async def on_memory_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     lines.append(f"📸 photos today: {pics_today}/{CONFIG.pic_max_per_day}")
     lines.append(f"\n🔹 facts ({len(facts)}):")
     for f in facts:
-        lines.append(f"  · {f}")
+        lines.append(f"  · #{f['id']} {f['fact']}")
     lines.append(f"\n🔸 events in last 7 days ({len(events)}):")
     for e in events:
-        lines.append(f"  · [{e['created_at'][:16]}] {e['text']}")
+        lines.append(f"  · #{e['id']} [{e['created_at'][:16]}] {e['text']}")
+    lines.append(
+        "\nUse /forgetfact <id> or /forgetevent <id> to delete, "
+        "/editfact <id> <new text> to edit."
+    )
     await update.message.reply_text("\n".join(lines) if lines else "memory is empty")
+
+
+async def on_forgetfact_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/forgetfact <id>: delete a fact by id."""
+    if not _authorized(update):
+        return
+    args = context.args or []
+    if not args or not args[0].lstrip("#").isdigit():
+        await update.message.reply_text("usage: /forgetfact <id>\n(see ids via /memory)")
+        return
+    fact_id = int(args[0].lstrip("#"))
+    amem = _get_memory(context)
+    ok = await amem.delete_fact(fact_id)
+    if ok:
+        log.info("fact #%d deleted", fact_id)
+        await update.message.reply_text(f"✓ fact #{fact_id} removed")
+    else:
+        await update.message.reply_text(f"❌ fact #{fact_id} not found")
+
+
+async def on_forgetevent_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/forgetevent <id>: delete an event by id."""
+    if not _authorized(update):
+        return
+    args = context.args or []
+    if not args or not args[0].lstrip("#").isdigit():
+        await update.message.reply_text("usage: /forgetevent <id>\n(see ids via /memory)")
+        return
+    event_id = int(args[0].lstrip("#"))
+    amem = _get_memory(context)
+    ok = await amem.delete_event(event_id)
+    if ok:
+        log.info("event #%d deleted", event_id)
+        await update.message.reply_text(f"✓ event #{event_id} removed")
+    else:
+        await update.message.reply_text(f"❌ event #{event_id} not found")
+
+
+async def on_editfact_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/editfact <id> <new text>: replace a fact's text."""
+    if not _authorized(update):
+        return
+    args = context.args or []
+    if len(args) < 2 or not args[0].lstrip("#").isdigit():
+        await update.message.reply_text(
+            "usage: /editfact <id> <new text>\n"
+            "ex: /editfact 7 Matt works at an AI startup"
+        )
+        return
+    fact_id = int(args[0].lstrip("#"))
+    new_text = " ".join(args[1:]).strip()
+    if not new_text:
+        await update.message.reply_text("empty text, nothing to update")
+        return
+    amem = _get_memory(context)
+    ok = await amem.update_fact(fact_id, new_text)
+    if ok:
+        log.info("fact #%d updated: %s", fact_id, new_text[:100])
+        await update.message.reply_text(f"✓ fact #{fact_id} updated: {new_text}")
+    else:
+        await update.message.reply_text(f"❌ fact #{fact_id} not found")
 
 
 def _photo_refusal_message(reason: str) -> str:
@@ -576,6 +644,9 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("fact", on_fact_cmd))
     app.add_handler(CommandHandler("event", on_event_cmd))
     app.add_handler(CommandHandler("memory", on_memory_cmd))
+    app.add_handler(CommandHandler("forgetfact", on_forgetfact_cmd))
+    app.add_handler(CommandHandler("forgetevent", on_forgetevent_cmd))
+    app.add_handler(CommandHandler("editfact", on_editfact_cmd))
     app.add_handler(CommandHandler("pic", on_pic_cmd))
     app.add_handler(CommandHandler("selfie", on_selfie_cmd))
     app.add_handler(CommandHandler("refs", on_refs_cmd))
