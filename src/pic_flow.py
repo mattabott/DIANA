@@ -221,8 +221,13 @@ async def run_pic_flow(
         log.exception("send_photo failed")
         return None
 
-    # 4. DB log + assistant-role message in history so the bot remembers it.
+    # 4. DB log + assistant-role message in history.
+    # IMPORTANT: we save ONLY the caption to history (the same text the user
+    # saw below the photo). If we saved the scene prompt as well (e.g.
+    # "[photo sent: <prompt>] ..."), the LLM would learn that pattern from
+    # past messages and imitate it as a text reply instead of actually
+    # generating a photo. The scene is still kept in pic_log for debugging.
     await amem.log_pic(trigger_type, scene_prompt, caption)
-    await amem.save_message("assistant", f"[photo sent: {scene_prompt[:120]}] {caption}")
+    await amem.save_message("assistant", caption)
 
     return caption
