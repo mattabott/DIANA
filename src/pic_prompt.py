@@ -115,6 +115,13 @@ Rules for "prompt":
   USE EXPLICIT ENGLISH TERMS: "topless, large breasts exposed", "naked", \
   "wearing only lingerie", "see-through lingerie", "nipples visible". Do not soften.
 - If the user asks for a dressed/casual scene, pick a coherent outfit.
+- IMPORTANT for "sexy" + COVERING outfit (bathrobe, dress, pajamas, shirt, \
+  coat, hoodie, sweater): do NOT translate "sexy" as "tied loosely / \
+  revealing / open / see-through / showing cleavage". The garment stays \
+  PROPERLY WORN and covering; move the "sexy" to POSE/EXPRESSION: "posing \
+  sensually, confident look, hand on hip, fully covered". Example: \
+  "sexy bathrobe" -> "wearing thick plush bathrobe properly tied with \
+  belt, posing sensually, full body covered".
 - Plausible scenes: home, bathroom, bedroom, kitchen, bookstore, bed, shower, outdoors
 - Match the mood and time of day
 

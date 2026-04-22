@@ -187,7 +187,25 @@ async def generate_image(
     one (0.6-0.8) moves away from it.
     """
     is_nsfw = CONFIG.horde_nsfw if nsfw is None else bool(nsfw)
-    full_prompt = f"{prompt.strip()} ### {DEFAULT_NEGATIVE}"
+
+    # Dynamic negative prompt: when the prompt mentions a covering garment,
+    # block the tokens that would steer SD toward bikini/lingerie/topless.
+    _COVERING = ("bathrobe", "robe ", "robe,", "dress", "pajamas", "shirt",
+                 "blouse", "sweater", "hoodie", "coat", "jacket", "gown",
+                 "overcoat")
+    dyn_negative = DEFAULT_NEGATIVE
+    low_prompt = prompt.lower()
+    if any(w in low_prompt for w in _COVERING) and not any(
+        x in low_prompt for x in ("nude", "naked", "topless", "exposed", "see-through")
+    ):
+        dyn_negative = dyn_negative + (
+            ", bikini, swimsuit, one-piece, lingerie, bra and panties, "
+            "underwear, topless, nude, naked, exposed breasts, visible nipples, "
+            "open robe, untied belt, revealing outfit, revealing cleavage, "
+            "see-through fabric"
+        )
+
+    full_prompt = f"{prompt.strip()} ### {dyn_negative}"
 
     params = dict(DEFAULT_PARAMS)
     if CONFIG.horde_seed:
