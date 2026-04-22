@@ -366,10 +366,10 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 intimacy_count=count,
                 events=events,
             ),
-            timeout=600.0,
+            timeout=900.0,
         )
     except asyncio.TimeoutError:
-        log.error("Agent timeout after 600s")
+        log.error("Agent timeout after 900s")
         reply = "mmh sorry, I got distracted... what were you saying?"
     except Exception:
         log.exception("Agent error")
