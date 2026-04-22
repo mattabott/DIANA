@@ -1,0 +1,35 @@
+# Diana bot systemd unit template.
+# BEFORE installing (via ./deploy/install.sh) the script will substitute the
+# placeholders below with real values from your system:
+#   <USER>         -> your Linux username (e.g. "pi", "ubuntu")
+#   <PROJECT_DIR>  -> absolute path to the project (e.g. "/home/pi/diana")
+# Or substitute manually with sed:
+#   sed -i "s|<USER>|$USER|g; s|<PROJECT_DIR>|$PWD|g" deploy/diana-bot.service
+
+[Unit]
+Description=Diana Telegram Bot (Ollama + LangGraph)
+After=network-online.target ollama.service
+Wants=network-online.target
+Requires=ollama.service
+
+[Service]
+Type=simple
+User=<USER>
+Group=<USER>
+WorkingDirectory=<PROJECT_DIR>
+Environment="PATH=<PROJECT_DIR>/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=<PROJECT_DIR>/venv/bin/python -m src.bot
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=diana-bot
+
+# Reasonable resource limits (tune to your hardware).
+# On a Raspberry Pi 5 with Ollama as a separate service, 2G for the Python
+# process is plenty.
+MemoryMax=2G
+CPUQuota=380%
+
+[Install]
+WantedBy=multi-user.target
