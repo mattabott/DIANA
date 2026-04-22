@@ -92,23 +92,37 @@ DEFAULT_NEGATIVE = (
 
 
 async def _submit(client: httpx.AsyncClient, payload: dict) -> str:
-    r = await client.post(
-        f"{API_BASE}/generate/async",
-        json=payload,
-        headers={
-            "apikey": CONFIG.horde_api_key,
-            "Client-Agent": CLIENT_AGENT,
-        },
-        timeout=30.0,
-    )
-    if r.status_code not in (200, 202):
-        raise HordeError(f"submit failed: {r.status_code} {r.text[:300]}")
-    data = r.json()
-    task_id = data.get("id")
-    if not task_id:
-        raise HordeError(f"no id in response: {data}")
-    log.info("horde task queued: %s", task_id)
-    return task_id
+    # Horde is sometimes slow to respond to submit (especially when the
+    # queue is busy). Retry with backoff on network/read timeouts.
+    # 4xx errors (CorruptPrompt, KudosUpfront, etc.) are NOT retried —
+    # they need a prompt fix, not waiting.
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        try:
+            r = await client.post(
+                f"{API_BASE}/generate/async",
+                json=payload,
+                headers={
+                    "apikey": CONFIG.horde_api_key,
+                    "Client-Agent": CLIENT_AGENT,
+                },
+                timeout=60.0,
+            )
+        except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout, httpx.NetworkError) as e:
+            last_exc = e
+            backoff = 3 * (attempt + 1)
+            log.warning("horde submit network error (%s), retrying in %ds", type(e).__name__, backoff)
+            await asyncio.sleep(backoff)
+            continue
+        if r.status_code not in (200, 202):
+            raise HordeError(f"submit failed: {r.status_code} {r.text[:300]}")
+        data = r.json()
+        task_id = data.get("id")
+        if not task_id:
+            raise HordeError(f"no id in response: {data}")
+        log.info("horde task queued: %s", task_id)
+        return task_id
+    raise HordeError(f"submit failed after 3 retries: {type(last_exc).__name__}: {last_exc}")
 
 
 async def _wait_for_done(client: httpx.AsyncClient, task_id: str, max_wait_s: float) -> None:
