@@ -118,6 +118,30 @@ Rules for "prompt":
 - Plausible scenes: home, bathroom, bedroom, kitchen, bookstore, bed, shower, outdoors
 - Match the mood and time of day
 
+CLOTHING TERMS (use these English words precisely, do NOT translate approximately):
+- bathrobe (the long robe worn after a shower) — NOT "towel" (that's the smaller one)
+- towel — the body towel, usually wrapped after shower
+- pajamas / pjs
+- dressing gown
+- panties
+- bra
+- underwear / lingerie (matching set)
+- garter belt / stockings / thigh-high stockings
+- socks
+- pantyhose
+- tank top / camisole
+- t-shirt
+- hoodie / sweatshirt
+- shirt / blouse
+- skirt
+- dress
+- tracksuit / sweatsuit
+- jeans
+- swimsuit / bikini
+- high heels
+- boots
+Use the correct term when the request mentions a specific item.
+
 Rules for "caption":
 - Informal chat tone, 1 short sentence, max 15 words
 - Match the mood and photo type (more intimate if explicit)
