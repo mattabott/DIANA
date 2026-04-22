@@ -3,6 +3,7 @@ import asyncio
 import base64
 import io
 import logging
+import re
 from pathlib import Path
 from telegram import Update
 from telegram.constants import ChatAction
@@ -144,14 +145,61 @@ async def on_selfie_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("mmh can't manage it right now, try again")
 
 
+# Clothing / outfit words. If the user prompt is "outfit-only" (no scene,
+# pose, or framing), route to the LLM so it can build a proper scene with
+# a full-body shot, otherwise SD tends to pick head-only selfies.
+_OUTFIT_WORDS = {
+    "bathrobe", "towel", "pajamas", "pyjamas", "pjs", "robe", "nightgown",
+    "dress", "skirt", "shirt", "blouse", "t-shirt", "tshirt", "top",
+    "hoodie", "sweater", "jacket", "coat", "suit", "tracksuit",
+    "jeans", "pants", "shorts", "leggings", "tights",
+    "lingerie", "bra", "panties", "underwear", "bikini", "swimsuit", "thong",
+    "stockings", "pantyhose", "socks",
+    "heels", "boots", "shoes", "sneakers",
+    "uniform", "costume", "outfit", "nude", "naked", "topless",
+}
+
+# SD-style descriptors. If present, the prompt likely is already a proper
+# Stable Diffusion prompt, so use it literal.
+_SD_STYLE_HINTS = {
+    "wearing", "sitting", "standing", "holding", "lying", "looking",
+    "leaning", "kneeling", "walking", "posing",
+}
+
+
+def _prompt_needs_llm(prompt: str) -> bool:
+    """True if the prompt should be routed to the LLM scene-generator
+    instead of sent literal to Horde. Two cases:
+      1) Short prompt with an outfit word but no scene/pose descriptor
+         (e.g. "sexy bathrobe"): without elaboration, SD picks random
+         framing and the outfit often ends up out of frame.
+      2) Very short prompt (<=3 words): too minimal for SD to interpret.
+    """
+    words = re.findall(r"\b[a-zA-Z]+\b", prompt.lower())
+    word_set = set(words)
+    has_sd_scene = bool(word_set & _SD_STYLE_HINTS)
+    has_outfit = bool(word_set & _OUTFIT_WORDS)
+    if len(words) <= 6 and has_outfit and not has_sd_scene:
+        return True
+    if len(words) <= 3:
+        return True
+    return False
+
+
 async def on_pic_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/pic <english prompt> — generate a photo with an explicit prompt."""
+    """/pic <prompt> — generate a photo.
+    If the prompt is SD-style (wearing/sitting/standing + commas), sends it
+    literally to Horde. If it's short/outfit-only (e.g. "sexy bathrobe"),
+    routes it through the LLM scene-generator to elaborate scene+pose+framing.
+    """
     if not _authorized(update):
         return
     user_prompt = " ".join(context.args).strip() if context.args else ""
     if not user_prompt:
         await update.message.reply_text(
-            "usage: /pic <english description>\nex: /pic wearing a red dress, in a bookstore"
+            "usage: /pic <description>\n"
+            "- SD-style English: /pic wearing a red dress, in a bookstore\n"
+            "- short hint: /pic sexy bathrobe  (LLM will elaborate the scene)"
         )
         return
     amem = _get_memory(context)
@@ -159,14 +207,28 @@ async def on_pic_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if not ok:
         await update.message.reply_text(f"⏳ quota/cooldown: {reason}")
         return
-    caption = await run_pic_flow(
-        bot=context.bot,
-        amem=amem,
-        chat_id=update.message.chat_id,
-        trigger_type="manual",
-        explicit_prompt=user_prompt,
-        status_message_text=f"⏳ generating... ({user_prompt[:80]})",
-    )
+
+    if _prompt_needs_llm(user_prompt):
+        log.info("/pic routing to LLM scene generator: %r", user_prompt[:80])
+        mood = await ensure_today_mood(amem)
+        caption = await run_pic_flow(
+            bot=context.bot,
+            amem=amem,
+            chat_id=update.message.chat_id,
+            trigger_type="manual",
+            user_hint=user_prompt,
+            mood=mood,
+            status_message_text=f"⏳ generating (LLM-elaborated)... ({user_prompt[:80]})",
+        )
+    else:
+        caption = await run_pic_flow(
+            bot=context.bot,
+            amem=amem,
+            chat_id=update.message.chat_id,
+            trigger_type="manual",
+            explicit_prompt=user_prompt,
+            status_message_text=f"⏳ generating... ({user_prompt[:80]})",
+        )
     if caption is None:
         # error already shown via status message in run_pic_flow
         pass
