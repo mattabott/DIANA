@@ -118,29 +118,12 @@ Rules for "prompt":
 - Plausible scenes: home, bathroom, bedroom, kitchen, bookstore, bed, shower, outdoors
 - Match the mood and time of day
 
-CLOTHING TERMS (use these English words precisely, do NOT translate approximately):
-- bathrobe (the long robe worn after a shower) — NOT "towel" (that's the smaller one)
-- towel — the body towel, usually wrapped after shower
-- pajamas / pjs
-- dressing gown
-- panties
-- bra
-- underwear / lingerie (matching set)
-- garter belt / stockings / thigh-high stockings
-- socks
-- pantyhose
-- tank top / camisole
-- t-shirt
-- hoodie / sweatshirt
-- shirt / blouse
-- skirt
-- dress
-- tracksuit / sweatsuit
-- jeans
-- swimsuit / bikini
-- high heels
-- boots
-Use the correct term when the request mentions a specific item.
+CLOTHING TERMS (use precise English, NOT approximate):
+bathrobe (long post-shower robe, NOT a towel); towel; pajamas; dressing gown;
+panties; bra; lingerie (matching set); garter belt; stockings; pantyhose;
+tank top; t-shirt; hoodie; shirt; skirt; dress; tracksuit; jeans; swimsuit;
+bikini; high heels; boots. Pick the right term when a specific item is
+mentioned — do not generalize to "towel" or "clothes".
 
 Rules for "caption":
 - Informal chat tone, 1 short sentence, max 15 words
@@ -220,7 +203,7 @@ def _time_of_day() -> str:
 async def generate_scene_and_caption(
     user_hint: Optional[str] = None,
     mood: Optional[dict] = None,
-    timeout_s: float = 120.0,
+    timeout_s: float = 240.0,
 ) -> dict:
     """Generate {prompt, caption} via LLM. On error, return a random fallback scene."""
     tod = _time_of_day()
