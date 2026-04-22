@@ -43,7 +43,7 @@ def get_agent() -> Any:
             reasoning=False,
             temperature=0.8,
             num_ctx=8192,
-            num_predict=250,
+            num_predict=150,
             keep_alive=CONFIG.ollama_keep_alive,
         )
         _agent = create_react_agent(model=llm, tools=ALL_TOOLS)
