@@ -78,6 +78,39 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("hi 👋")
 
 
+HELP_TEXT = """📖 *Available commands*
+
+/start — initial greeting
+/help — this message
+
+*Memory*
+/memory — show what the bot knows about you (exchanges, photos today, facts, events)
+/fact <text> — save a durable fact about you (always in the prompt)
+/event <text> — save a recent event (stays in the prompt for 7 days)
+
+*Photo generation*
+/pic <prompt> — generate a photo
+  · SD-style English prompt (e.g. "wearing a red dress, in a bookstore") → sent literal to Horde
+  · short/outfit-only prompt (e.g. "sexy bathrobe") → LLM elaborates scene+pose first
+/selfie [hint] — force LLM-elaborated generation (no hint = uses today's mood)
+/setref — set a reference image: send a photo with caption /setref
+/refs — list loaded references
+/clearref — remove all references
+
+*Debug*
+/ping — force an immediate autonomous message (bypasses rate limit)
+
+*Notes*
+· The bot also auto-detects photo requests in chat text (e.g. "send me a photo", "show me").
+· Continuation follow-ups ("go on, send it") after the bot just mentioned a photo are detected too."""
+
+
+async def on_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _authorized(update):
+        return
+    await update.message.reply_text(HELP_TEXT, parse_mode="Markdown")
+
+
 async def on_ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Debug command: force an immediate autonomous message (bypasses rate limit)."""
     if not _authorized(update):
@@ -538,6 +571,7 @@ def build_app() -> Application:
     app.bot_data["memory"] = amem
 
     app.add_handler(CommandHandler("start", on_start))
+    app.add_handler(CommandHandler("help", on_help))
     app.add_handler(CommandHandler("ping", on_ping))
     app.add_handler(CommandHandler("fact", on_fact_cmd))
     app.add_handler(CommandHandler("event", on_event_cmd))
