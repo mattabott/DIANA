@@ -3,6 +3,7 @@ import asyncio
 import base64
 import io
 import logging
+import random
 import re
 from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -698,7 +699,25 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         stop.set()
         await typing_task
 
-    await msg.reply_text(reply)
+    # Decide text vs voice. Voice only if enabled, positive roll, and the
+    # text is not too long (Piper latency is roughly 0.2s per 10 chars).
+    send_as_voice = (
+        CONFIG.voice_enabled
+        and len(reply) <= CONFIG.voice_max_chars
+        and random.randint(1, 100) <= CONFIG.voice_probability
+    )
+    sent_voice = False
+    if send_as_voice:
+        try:
+            from src.tts import synthesize_opus  # lazy import: no onnxruntime if disabled
+            opus = await synthesize_opus(reply)
+            await context.bot.send_voice(chat_id=msg.chat_id, voice=opus)
+            sent_voice = True
+            log.info("reply sent as voice (%d chars)", len(reply))
+        except Exception:
+            log.exception("voice synthesis/send failed, falling back to text")
+    if not sent_voice:
+        await msg.reply_text(reply)
 
     # Save the exchange AFTER sending (if send fails, better not to memorize).
     await amem.save_message("user", user_text)

@@ -47,6 +47,10 @@ class Config:
     pic_max_per_day: int
     pic_cooldown_min: int
     pic_autonomous_prob: int
+    voice_enabled: bool
+    voice_probability: int
+    voice_max_chars: int
+    tts_voice_model: str
 
 
 CONFIG = Config(
@@ -72,4 +76,8 @@ CONFIG = Config(
     pic_max_per_day=_int("PIC_MAX_PER_DAY", 10),
     pic_cooldown_min=_int("PIC_COOLDOWN_MIN", 5),
     pic_autonomous_prob=_int("PIC_AUTONOMOUS_PROB", 30),
+    voice_enabled=_bool("VOICE_ENABLED", False),
+    voice_probability=_int("VOICE_PROBABILITY", 40),
+    voice_max_chars=_int("VOICE_MAX_CHARS", 400),
+    tts_voice_model=os.getenv("TTS_VOICE_MODEL", "en_US-amy-medium.onnx"),
 )
