@@ -5,9 +5,12 @@ import io
 import logging
 import re
 from pathlib import Path
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ChatAction
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler, ContextTypes, filters,
+    CallbackQueryHandler,
+)
 from PIL import Image
 
 from src.config import CONFIG
@@ -108,10 +111,202 @@ HELP_TEXT = """📖 *Available commands*
 · Continuation follow-ups ("go on, send it") after the bot just mentioned a photo are detected too."""
 
 
+def _main_menu_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🧠 Memory", callback_data="main:memory")],
+        [InlineKeyboardButton("📸 Photos", callback_data="main:photo")],
+        [InlineKeyboardButton("📖 Commands info", callback_data="main:commands")],
+    ])
+
+
+def _memory_submenu_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 View memory", callback_data="mem:view")],
+        [
+            InlineKeyboardButton("➕ Add fact", callback_data="mem:add_fact"),
+            InlineKeyboardButton("➕ Add event", callback_data="mem:add_event"),
+        ],
+        [
+            InlineKeyboardButton("❌ Delete fact", callback_data="mem:del_fact"),
+            InlineKeyboardButton("❌ Delete event", callback_data="mem:del_event"),
+        ],
+        [InlineKeyboardButton("↩️ Back", callback_data="main:home")],
+    ])
+
+
+def _photo_submenu_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🖼 View references", callback_data="photo:refs")],
+        [InlineKeyboardButton("🗑 Clear references", callback_data="photo:clearref")],
+        [InlineKeyboardButton("↩️ Back", callback_data="main:home")],
+    ])
+
+
+def _back_button(to: str = "main:home") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton("↩️ Back", callback_data=to)]])
+
+
 async def on_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not _authorized(update):
         return
-    await update.message.reply_text(HELP_TEXT, parse_mode="Markdown")
+    await update.message.reply_text("What would you like to do?", reply_markup=_main_menu_markup())
+
+
+async def _render_memory_view(amem: AsyncMemory) -> str:
+    facts = await amem.list_facts_with_id(limit=50)
+    events = await amem.recent_events(days=7, limit=50)
+    count = await amem.get_interaction_count()
+    pics_today = await amem.pic_count_today()
+    lines = [f"📊 exchanges: {count}  |  📸 photos today: {pics_today}/{CONFIG.pic_max_per_day}"]
+    lines.append(f"\n🔹 facts ({len(facts)}):")
+    for f in facts:
+        lines.append(f"  · #{f['id']} {f['fact']}")
+    lines.append(f"\n🔸 events (last 7 days) ({len(events)}):")
+    for e in events:
+        lines.append(f"  · #{e['id']} [{e['created_at'][:16]}] {e['text']}")
+    return "\n".join(lines)
+
+
+def _del_list_markup(items: list[dict], prefix: str, parent: str) -> InlineKeyboardMarkup:
+    """items = [{'id':..,'text':..}] -> 'delete' buttons. prefix = 'fact' | 'event'."""
+    buttons = []
+    for it in items:
+        label = f"❌ #{it['id']} {it['text'][:40]}"
+        buttons.append([InlineKeyboardButton(label, callback_data=f"{prefix}:del:{it['id']}")])
+    buttons.append([InlineKeyboardButton("↩️ Back", callback_data=parent)])
+    return InlineKeyboardMarkup(buttons)
+
+
+async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Dispatches every callback_query from the /help inline keyboard."""
+    q = update.callback_query
+    if q is None:
+        return
+    if q.message is None or q.message.chat.id != CONFIG.allowed_chat_id:
+        await q.answer()
+        return
+    await q.answer()
+    data = q.data or ""
+    amem = _get_memory(context)
+
+    # --- main navigation ---
+    if data == "main:home":
+        await q.edit_message_text("What would you like to do?", reply_markup=_main_menu_markup())
+        return
+    if data == "main:memory":
+        await q.edit_message_text("🧠 *Memory*", parse_mode="Markdown",
+                                  reply_markup=_memory_submenu_markup())
+        return
+    if data == "main:photo":
+        await q.edit_message_text("📸 *Photos*", parse_mode="Markdown",
+                                  reply_markup=_photo_submenu_markup())
+        return
+    if data == "main:commands":
+        await q.edit_message_text(HELP_TEXT, parse_mode="Markdown",
+                                  reply_markup=_back_button("main:home"))
+        return
+
+    # --- memory ---
+    if data == "mem:view":
+        text = await _render_memory_view(amem)
+        await q.edit_message_text(text, reply_markup=_back_button("main:memory"))
+        return
+
+    if data == "mem:add_fact":
+        context.user_data["pending"] = "add_fact"
+        await q.edit_message_text(
+            "✏️ Send the fact to save (next message will be used).",
+            reply_markup=_back_button("main:memory"),
+        )
+        return
+    if data == "mem:add_event":
+        context.user_data["pending"] = "add_event"
+        await q.edit_message_text(
+            "✏️ Send the event to save (next message will be used).",
+            reply_markup=_back_button("main:memory"),
+        )
+        return
+
+    if data == "mem:del_fact":
+        facts = await amem.list_facts_with_id(limit=50)
+        if not facts:
+            await q.edit_message_text("No facts saved.",
+                                      reply_markup=_back_button("main:memory"))
+            return
+        items = [{"id": f["id"], "text": f["fact"]} for f in facts]
+        await q.edit_message_text("Pick a fact to delete:",
+                                  reply_markup=_del_list_markup(items, "fact", "main:memory"))
+        return
+    if data == "mem:del_event":
+        events = await amem.recent_events(days=7, limit=50)
+        if not events:
+            await q.edit_message_text("No recent events.",
+                                      reply_markup=_back_button("main:memory"))
+            return
+        items = [{"id": e["id"], "text": e["text"]} for e in events]
+        await q.edit_message_text("Pick an event to delete:",
+                                  reply_markup=_del_list_markup(items, "event", "main:memory"))
+        return
+
+    if data.startswith("fact:del:"):
+        try:
+            fid = int(data.split(":")[2])
+        except (ValueError, IndexError):
+            return
+        ok = await amem.delete_fact(fid)
+        log.info("fact #%d deleted via menu: %s", fid, ok)
+        facts = await amem.list_facts_with_id(limit=50)
+        header = f"{'✓' if ok else '❌'} fact #{fid} {'removed' if ok else 'not found'}."
+        if facts:
+            items = [{"id": f["id"], "text": f["fact"]} for f in facts]
+            await q.edit_message_text(header + "\n\nMore facts to delete:",
+                                      reply_markup=_del_list_markup(items, "fact", "main:memory"))
+        else:
+            await q.edit_message_text(header + "\n\nNo more facts.",
+                                      reply_markup=_back_button("main:memory"))
+        return
+    if data.startswith("event:del:"):
+        try:
+            eid = int(data.split(":")[2])
+        except (ValueError, IndexError):
+            return
+        ok = await amem.delete_event(eid)
+        log.info("event #%d deleted via menu: %s", eid, ok)
+        events = await amem.recent_events(days=7, limit=50)
+        header = f"{'✓' if ok else '❌'} event #{eid} {'removed' if ok else 'not found'}."
+        if events:
+            items = [{"id": e["id"], "text": e["text"]} for e in events]
+            await q.edit_message_text(header + "\n\nMore events to delete:",
+                                      reply_markup=_del_list_markup(items, "event", "main:memory"))
+        else:
+            await q.edit_message_text(header + "\n\nNo more events.",
+                                      reply_markup=_back_button("main:memory"))
+        return
+
+    # --- photos ---
+    if data == "photo:refs":
+        refs = _list_refs()
+        if not refs:
+            text = ("No reference loaded.\n\n"
+                    "Send a photo with caption /setref to add one.")
+        else:
+            lines = [f"📸 {len(refs)}/{MAX_REFS} references:"]
+            for r in refs:
+                size_kb = r.stat().st_size / 1024
+                lines.append(f"  · {r.name} ({size_kb:.0f} KB)")
+            text = "\n".join(lines)
+        await q.edit_message_text(text, reply_markup=_back_button("main:photo"))
+        return
+    if data == "photo:clearref":
+        refs = _list_refs()
+        for r in refs:
+            r.unlink(missing_ok=True)
+        log.info("cleared %d references via menu", len(refs))
+        await q.edit_message_text(f"✓ removed {len(refs)} references.",
+                                  reply_markup=_back_button("main:photo"))
+        return
+
+    await q.edit_message_text("Unknown action.", reply_markup=_main_menu_markup())
 
 
 async def on_ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -402,6 +597,30 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     amem = _get_memory(context)
 
+    # Menu state: if /help asked to "send me a fact/event", capture the
+    # next user message here and save it, skipping the normal chat flow.
+    pending = (context.user_data or {}).get("pending")
+    if pending == "add_fact":
+        context.user_data["pending"] = None
+        text = user_text.strip()
+        if not text:
+            await msg.reply_text("empty text, nothing saved")
+            return
+        await amem.save_fact(text)
+        log.info("fact added via menu: %s", text[:100])
+        await msg.reply_text(f"✓ fact added: {text}")
+        return
+    if pending == "add_event":
+        context.user_data["pending"] = None
+        text = user_text.strip()
+        if not text:
+            await msg.reply_text("empty text, nothing saved")
+            return
+        await amem.save_event(text)
+        log.info("event added via menu: %s", text[:100])
+        await msg.reply_text(f"✓ event added: {text}")
+        return
+
     # Photo intent detection: two paths
     #   a) direct regex on the message ("send me a photo...")
     #   b) hybrid: bot's last message mentioned a photo + user insists
@@ -651,6 +870,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("selfie", on_selfie_cmd))
     app.add_handler(CommandHandler("refs", on_refs_cmd))
     app.add_handler(CommandHandler("clearref", on_clearref_cmd))
+    app.add_handler(CallbackQueryHandler(on_callback))
     app.add_handler(MessageHandler(filters.PHOTO, on_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     app.add_handler(MessageHandler(filters.ALL, on_any))
