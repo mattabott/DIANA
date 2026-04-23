@@ -175,7 +175,7 @@ async def _fetch_result_url(client: httpx.AsyncClient, task_id: str) -> str:
 async def generate_image(
     prompt: str,
     nsfw: bool | None = None,
-    max_wait_s: float = 480.0,  # 8 minutes
+    max_wait_s: float = 1200.0,  # 20 minutes (Horde often congested on niche models)
     source_image_b64: str | None = None,
     denoising_strength: float = 0.55,
 ) -> bytes:
