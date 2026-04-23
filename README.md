@@ -1,6 +1,16 @@
 # Diana
 
-Personal **single-user** Telegram bot powered by a local LLM (Ollama), with configurable persona, persistent memory, autonomous messages and photo generation via Stable Horde. Built for private roleplay / companion use between consenting adults.
+### Local-first AI companion on a Raspberry Pi — zero cloud, zero paid APIs.
+
+![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-local%20LLM-000?logo=ollama)
+![LangGraph](https://img.shields.io/badge/LangGraph-ReAct%20agent-1c3d5a)
+![Telegram](https://img.shields.io/badge/Telegram-bot-26A5E4?logo=telegram&logoColor=white)
+![Stable Horde](https://img.shields.io/badge/Stable%20Horde-free%20GPU-purple)
+![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi%205-supported-C51A4A?logo=raspberrypi&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+Personal **single-user** Telegram bot powered by a local LLM (Ollama), with a fully configurable persona, persistent layered memory, autonomous scheduled messages and photo generation via Stable Horde. Built to run **entirely offline** on modest hardware (Raspberry Pi 5 class) for private companion / roleplay use between consenting adults.
 
 > **Adult content warning** — the system optionally supports explicit roleplay and NSFW image generation through Stable Horde. It is meant for **personal, local, adult use only**. It is not a product intended for public or multi-user deployment.
 
