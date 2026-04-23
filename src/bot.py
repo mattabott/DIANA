@@ -932,7 +932,12 @@ def build_app() -> Application:
     set_memory(mem_sync)
     amem = AsyncMemory(mem_sync)
 
-    app = Application.builder().token(CONFIG.telegram_token).build()
+    app = (
+        Application.builder()
+        .token(CONFIG.telegram_token)
+        .concurrent_updates(True)
+        .build()
+    )
     app.bot_data["memory"] = amem
 
     app.add_handler(CommandHandler("start", on_start))
