@@ -205,13 +205,15 @@ styles:
       - "anime portrait, close-up, looking at viewer, dynamic pose, expressive face, highly detailed anime art"
       - "anime full body shot, dynamic pose, detailed background, anime scene composition"
       - "anime selfie composition, smartphone-like framing, looking at camera, playful anime expression"
+    # SD 1.5 models only: at 384x576 any SDXL checkpoint (e.g. Nova Anime XL)
+    # produces corrupt/green output because it requires 1024+.
     horde_models:
-      - Nova Anime XL
       - Anything v5
       - Anything Diffusion
       - MeinaMix
       - Counterfeit
       - ToonYou
+      - Pastel Mix
     negative_prompt: >-
       photograph, photo, photorealistic, realistic, 3d render, real person, real face,
       low quality, blurry, jpeg artifacts, bad anatomy, bad proportions,
