@@ -200,17 +200,37 @@ def get_persona_system_prompt(
     return prompt
 
 
-def get_visual_prompt_prefix() -> str:
+AVAILABLE_STYLES = ("realistic", "anime")
+DEFAULT_STYLE = "realistic"
+
+
+def get_style_config(name: str) -> dict[str, Any]:
+    """Resolve the visual preset with a layered fallback:
+      1. persona.yaml -> styles.<name>
+      2. persona.yaml -> identity.* (pre-styles backward compat)
+      3. empty defaults
+    """
+    d = _data()
+    styles = d.get("styles") or {}
+    preset = styles.get(name) or {}
+    ident = d.get("identity", {}) or {}
+    return {
+        "prefix": (preset.get("visual_prompt_prefix") or ident.get("visual_prompt_prefix") or "").strip(),
+        "shot_types": preset.get("visual_shot_types") or ident.get("visual_shot_types") or [],
+        "models": preset.get("horde_models") or [],
+        "negative_prompt": (preset.get("negative_prompt") or "").strip(),
+    }
+
+
+def get_visual_prompt_prefix(style: str = DEFAULT_STYLE) -> str:
     """Visual prefix (English) to prepend to text-to-image prompts, to keep
     the character's look consistent across generated photos."""
-    ident = _data().get("identity", {}) or {}
-    return (ident.get("visual_prompt_prefix") or "").strip()
+    return get_style_config(style)["prefix"]
 
 
-def pick_visual_shot_type() -> str:
-    """Randomly pick a shot type (selfie / mirror selfie / other)."""
-    ident = _data().get("identity", {}) or {}
-    shots = ident.get("visual_shot_types") or []
+def pick_visual_shot_type(style: str = DEFAULT_STYLE) -> str:
+    """Randomly pick a shot type from the active visual preset."""
+    shots = get_style_config(style)["shot_types"]
     if not shots:
         return ""
     return random.choice(shots).strip()

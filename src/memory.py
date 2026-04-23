@@ -100,6 +100,15 @@ CREATE TABLE IF NOT EXISTS pic_log (
     sent_at       TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_piclog_chat_sent ON pic_log(chat_id, sent_at);
+
+-- Generic k/v store for runtime-editable bot settings (e.g. photo style).
+CREATE TABLE IF NOT EXISTS settings (
+    chat_id    INTEGER NOT NULL,
+    key        TEXT    NOT NULL,
+    value      TEXT    NOT NULL,
+    updated_at TEXT    NOT NULL,
+    PRIMARY KEY (chat_id, key)
+);
 """
 
 
@@ -409,6 +418,24 @@ class Memory:
         except ValueError:
             return None
 
+    # ---- settings (k/v) ----
+
+    def get_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT value FROM settings WHERE chat_id=? AND key=?",
+                (self.chat_id, key),
+            ).fetchone()
+        return row["value"] if row else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO settings(chat_id, key, value, updated_at) VALUES(?,?,?,?) "
+                "ON CONFLICT(chat_id, key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                (self.chat_id, key, value, _now_iso()),
+            )
+
 
 # Thin async wrapper: blocking SQLite calls run in a thread pool.
 class AsyncMemory:
@@ -484,3 +511,9 @@ class AsyncMemory:
 
     async def last_pic_at(self) -> Optional[datetime]:
         return await asyncio.to_thread(self._m.last_pic_at)
+
+    async def get_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        return await asyncio.to_thread(self._m.get_setting, key, default)
+
+    async def set_setting(self, key: str, value: str) -> None:
+        return await asyncio.to_thread(self._m.set_setting, key, value)
