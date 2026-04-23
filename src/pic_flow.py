@@ -22,8 +22,20 @@ from telegram.constants import ChatAction
 from src.config import CONFIG
 from src.memory import AsyncMemory
 from src.horde import generate_image, HordeError, CensorshipDetected
-from src.persona import get_visual_prompt_prefix, pick_visual_shot_type
+from src.persona import (
+    AVAILABLE_STYLES, DEFAULT_STYLE, get_style_config,
+    get_visual_prompt_prefix, pick_visual_shot_type,
+)
 from src.pic_prompt import generate_scene_and_caption
+
+
+SETTING_STYLE_KEY = "pic_style"
+
+
+async def get_active_style(amem: AsyncMemory) -> str:
+    """Read the active style from the DB with default fallback + validation."""
+    cur = await amem.get_setting(SETTING_STYLE_KEY, DEFAULT_STYLE)
+    return cur if cur in AVAILABLE_STYLES else DEFAULT_STYLE
 
 
 log = logging.getLogger("diana-bot.pic_flow")
@@ -120,9 +132,9 @@ async def can_send_pic(amem: AsyncMemory) -> tuple[bool, str]:
     return True, ""
 
 
-def _compose_full_prompt(scene_prompt: str) -> str:
-    prefix = get_visual_prompt_prefix()
-    shot = pick_visual_shot_type()
+def _compose_full_prompt(scene_prompt: str, style: str = DEFAULT_STYLE) -> str:
+    prefix = get_visual_prompt_prefix(style)
+    shot = pick_visual_shot_type(style)
     parts = [p for p in (prefix, shot, scene_prompt) if p]
     return ", ".join(parts)
 
@@ -154,8 +166,11 @@ async def run_pic_flow(
         scene_prompt = scene["prompt"]
         caption = scene["caption"]
 
-    full_prompt = _compose_full_prompt(scene_prompt)
-    log.info("pic flow %s: scene=%r caption=%r", trigger_type, scene_prompt[:80], caption[:80])
+    style = await get_active_style(amem)
+    style_cfg = get_style_config(style)
+    full_prompt = _compose_full_prompt(scene_prompt, style)
+    log.info("pic flow %s [style=%s]: scene=%r caption=%r",
+             trigger_type, style, scene_prompt[:80], caption[:80])
 
     # 2. Initial status + typing/upload_photo indicator
     status_msg = None
@@ -171,7 +186,11 @@ async def run_pic_flow(
     )
 
     try:
-        img_bytes = await generate_image(full_prompt)
+        img_bytes = await generate_image(
+            full_prompt,
+            models=style_cfg["models"] or None,
+            negative_override=style_cfg["negative_prompt"] or None,
+        )
     except CensorshipDetected as e:
         log.warning("censored by Horde filter: %s", e)
         if status_msg is not None:

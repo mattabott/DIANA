@@ -159,6 +159,69 @@ daily_moods:
     desc: "you're out today, replies come in bursts, short messages like 'haha ok', 'tell you later'"
 
 # ============================================================
+# VISUAL STYLE PRESETS
+# ============================================================
+# Runtime-switchable preset via /style command (persisted in the DB settings
+# table). Each preset overrides: visual_prompt_prefix, visual_shot_types,
+# Horde model list, and the base negative prompt. Default: "realistic".
+styles:
+  realistic:
+    visual_prompt_prefix: >-
+      mature adult woman in her late twenties, 26 year old adult female,
+      experienced mature woman, beautiful face, instagram beauty model,
+      glam makeup, flawless skin, soft pink blush, pink lip tint,
+      symmetrical face, confident mature pose, clear smooth skin,
+      athletic toned figure, narrow waist, long toned legs,
+    visual_shot_types:
+      - "selfie taken with iPhone front camera, holding phone in hand, looking at camera, amateur snapshot, unfiltered, unedited, raw photo, natural skin texture, pores visible, slight motion, casual, everyday, candid"
+      - "mirror selfie taken with iPhone, full body, phone visible in mirror, amateur snapshot, unfiltered, unedited, raw photo, natural skin texture, pores visible, bathroom or bedroom lighting, casual, everyday, candid"
+    horde_models:
+      - Realistic Vision
+      - ICBINP
+      - Photon
+      - epiCPhotoGasm
+    negative_prompt: >-
+      blurry, low quality, cartoon, anime, drawing, painting, illustration,
+      3d render, CGI, digital art, concept art, artistic, cinematic,
+      film grain, bokeh, shallow depth of field, dramatic lighting,
+      studio lighting, professional photography, fashion photography,
+      magazine cover, portrait photography, editorial,
+      smooth skin, airbrushed, plastic skin, doll, flawless skin,
+      instagram filter, beauty filter, oversaturated, HDR,
+      old woman, wrinkles, grey hair, aging, elderly,
+      chubby, overweight, fat, plump, heavy-set, BBW, double chin,
+      anorexic, excessively thin, emaciated,
+      deformed, disfigured, bad anatomy, extra limbs, extra fingers, bad hands,
+      text, watermark, signature, logo, ugly
+
+  anime:
+    visual_prompt_prefix: >-
+      anime style illustration, 2D anime art, cel shading, vibrant anime colors,
+      beautiful young adult woman, 26 year old, gorgeous anime face,
+      large expressive eyes, detailed anime irises, stylized anime hairstyle,
+      athletic toned figure, narrow waist, long toned legs,
+      soft lineart, clean anime lineart, pastel shading, anime proportions,
+    visual_shot_types:
+      - "anime portrait, close-up, looking at viewer, dynamic pose, expressive face, highly detailed anime art"
+      - "anime full body shot, dynamic pose, detailed background, anime scene composition"
+      - "anime selfie composition, smartphone-like framing, looking at camera, playful anime expression"
+    horde_models:
+      - Nova Anime XL
+      - Anything v5
+      - Anything Diffusion
+      - MeinaMix
+      - Counterfeit
+      - ToonYou
+    negative_prompt: >-
+      photograph, photo, photorealistic, realistic, 3d render, real person, real face,
+      low quality, blurry, jpeg artifacts, bad anatomy, bad proportions,
+      extra limbs, extra fingers, bad hands, deformed, disfigured, mutation,
+      old woman, middle-aged, wrinkles, elderly, grey hair, sagging skin,
+      chubby, overweight, fat, heavy-set, wide hips, double chin, anorexic, emaciated,
+      oversaturated, HDR, text, watermark, signature, logo, ugly
+
+
+# ============================================================
 # INTIMACY LEVEL
 # ============================================================
 # Level is computed as: 1 + interaction_count // 20, capped at 10.

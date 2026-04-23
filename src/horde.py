@@ -186,6 +186,8 @@ async def generate_image(
     max_wait_s: float = 1200.0,  # 20 minutes (Horde often congested on niche models)
     source_image_b64: str | None = None,
     denoising_strength: float = 0.55,
+    models: list[str] | None = None,
+    negative_override: str | None = None,
 ) -> bytes:
     """Generate a single image.
 
@@ -193,6 +195,10 @@ async def generate_image(
     the reference image and "noises" it toward the prompt). A low
     denoising_strength (0.3-0.5) preserves the reference heavily; a high
     one (0.6-0.8) moves away from it.
+
+    models: if provided, overrides CONFIG.horde_models (used by the style preset).
+    negative_override: if provided, overrides DEFAULT_NEGATIVE (used by the style
+    preset). The dynamic anti-bikini/lingerie logic is still applied on top.
     """
     is_nsfw = CONFIG.horde_nsfw if nsfw is None else bool(nsfw)
 
@@ -201,7 +207,8 @@ async def generate_image(
     _COVERING = ("bathrobe", "robe ", "robe,", "dress", "pajamas", "shirt",
                  "blouse", "sweater", "hoodie", "coat", "jacket", "gown",
                  "overcoat")
-    dyn_negative = DEFAULT_NEGATIVE
+    base_negative = negative_override if negative_override else DEFAULT_NEGATIVE
+    dyn_negative = base_negative
     low_prompt = prompt.lower()
     if any(w in low_prompt for w in _COVERING) and not any(
         x in low_prompt for x in ("nude", "naked", "topless", "exposed", "see-through")
@@ -231,8 +238,9 @@ async def generate_image(
         "r2": True,
         "replacement_filter": False,
     }
-    if CONFIG.horde_models:
-        payload["models"] = CONFIG.horde_models
+    active_models = models if models else CONFIG.horde_models
+    if active_models:
+        payload["models"] = active_models
     if source_image_b64:
         payload["source_image"] = source_image_b64
         payload["source_processing"] = "img2img"

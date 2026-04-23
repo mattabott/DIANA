@@ -19,9 +19,15 @@ from src.agent import generate_reply, generate_vision_reply, extract_facts
 from src.memory import Memory, AsyncMemory
 from src.tools import set_memory
 from src.scheduler import maybe_send_autonomous, force_send_autonomous
-from src.persona import ensure_today_mood, get_visual_prompt_prefix, pick_visual_shot_type
+from src.persona import (
+    ensure_today_mood, get_visual_prompt_prefix, pick_visual_shot_type,
+    AVAILABLE_STYLES, DEFAULT_STYLE,
+)
 from src.horde import generate_image, HordeError
-from src.pic_flow import is_photo_request, is_photo_continuation, run_pic_flow, can_send_pic
+from src.pic_flow import (
+    is_photo_request, is_photo_continuation, run_pic_flow, can_send_pic,
+    get_active_style, SETTING_STYLE_KEY,
+)
 
 
 MAX_IMAGE_SIDE = 512  # resize target: quality/speed trade-off on Pi 5
@@ -100,6 +106,7 @@ HELP_TEXT = """📖 *Available commands*
   · SD-style English prompt (e.g. "wearing a red dress, in a bookstore") → sent literal to Horde
   · short/outfit-only prompt (e.g. "sexy bathrobe") → LLM elaborates scene+pose first
 /selfie [hint] — force LLM-elaborated generation (no hint = uses today's mood)
+/style [realistic|anime] — show or change the photo style
 /setref — set a reference image: send a photo with caption /setref
 /refs — list loaded references
 /clearref — remove all references
@@ -135,8 +142,13 @@ def _memory_submenu_markup() -> InlineKeyboardMarkup:
     ])
 
 
-def _photo_submenu_markup() -> InlineKeyboardMarkup:
+def _photo_submenu_markup(current_style: str = DEFAULT_STYLE) -> InlineKeyboardMarkup:
+    style_row = []
+    for s in AVAILABLE_STYLES:
+        label = f"{'✅ ' if s == current_style else ''}🎨 {s}"
+        style_row.append(InlineKeyboardButton(label, callback_data=f"style:set:{s}"))
     return InlineKeyboardMarkup([
+        style_row,
         [InlineKeyboardButton("🖼 View references", callback_data="photo:refs")],
         [InlineKeyboardButton("🗑 Clear references", callback_data="photo:clearref")],
         [InlineKeyboardButton("↩️ Back", callback_data="main:home")],
@@ -199,8 +211,24 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                                   reply_markup=_memory_submenu_markup())
         return
     if data == "main:photo":
-        await q.edit_message_text("📸 *Photos*", parse_mode="Markdown",
-                                  reply_markup=_photo_submenu_markup())
+        cur_style = await get_active_style(amem)
+        await q.edit_message_text(
+            f"📸 *Photos* — style: {cur_style}",
+            parse_mode="Markdown",
+            reply_markup=_photo_submenu_markup(cur_style),
+        )
+        return
+    if data.startswith("style:set:"):
+        choice = data.split(":", 2)[2]
+        if choice in AVAILABLE_STYLES:
+            await amem.set_setting(SETTING_STYLE_KEY, choice)
+            log.info("pic style changed via menu: %s", choice)
+        cur_style = await get_active_style(amem)
+        await q.edit_message_text(
+            f"📸 *Photos* — style: {cur_style}",
+            parse_mode="Markdown",
+            reply_markup=_photo_submenu_markup(cur_style),
+        )
         return
     if data == "main:commands":
         await q.edit_message_text(HELP_TEXT, parse_mode="Markdown",
@@ -464,6 +492,37 @@ async def on_pic_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if caption is None:
         # error already shown via status message in run_pic_flow
         pass
+
+
+async def on_style_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/style — show or change the photo preset.
+    /style              → current + options
+    /style realistic    → switch to photoreal
+    /style anime        → switch to anime
+    """
+    if not _authorized(update):
+        return
+    amem = _get_memory(context)
+    current = await get_active_style(amem)
+    arg = (context.args[0].strip().lower() if context.args else "")
+    if not arg:
+        opts = " / ".join(
+            f"*{s}*" if s == current else s for s in AVAILABLE_STYLES
+        )
+        await update.message.reply_text(
+            f"🎨 current style: {current}\n"
+            f"available: {opts}\n"
+            f"use: /style {' | '.join(AVAILABLE_STYLES)}"
+        )
+        return
+    if arg not in AVAILABLE_STYLES:
+        await update.message.reply_text(
+            f"style '{arg}' not valid. use: /style {' | '.join(AVAILABLE_STYLES)}"
+        )
+        return
+    await amem.set_setting(SETTING_STYLE_KEY, arg)
+    log.info("pic style changed: %s -> %s", current, arg)
+    await update.message.reply_text(f"✓ photo style: {arg}")
 
 
 async def on_refs_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -887,6 +946,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("editfact", on_editfact_cmd))
     app.add_handler(CommandHandler("pic", on_pic_cmd))
     app.add_handler(CommandHandler("selfie", on_selfie_cmd))
+    app.add_handler(CommandHandler("style", on_style_cmd))
     app.add_handler(CommandHandler("refs", on_refs_cmd))
     app.add_handler(CommandHandler("clearref", on_clearref_cmd))
     app.add_handler(CallbackQueryHandler(on_callback))
