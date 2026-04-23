@@ -198,13 +198,32 @@ class Memory:
 
     # ---- facts ----
 
+    def _next_free_id(self, conn: sqlite3.Connection, table: str) -> int:
+        """Return the smallest positive id not in use for this chat_id in the
+        given table. Allows reusing ids freed by delete() instead of growing
+        monotonically (nicer UX for typing in /forgetfact / /editfact).
+        """
+        rows = conn.execute(
+            f"SELECT id FROM {table} WHERE chat_id=? ORDER BY id",
+            (self.chat_id,),
+        ).fetchall()
+        used = [int(r["id"]) for r in rows]
+        new_id = 1
+        for i in used:
+            if i == new_id:
+                new_id += 1
+            elif i > new_id:
+                break
+        return new_id
+
     def save_fact(self, fact: str) -> int:
         with self._conn() as c:
-            cur = c.execute(
-                "INSERT INTO facts(chat_id, fact, created_at) VALUES(?,?,?)",
-                (self.chat_id, fact, _now_iso()),
+            new_id = self._next_free_id(c, "facts")
+            c.execute(
+                "INSERT INTO facts(id, chat_id, fact, created_at) VALUES(?,?,?,?)",
+                (new_id, self.chat_id, fact, _now_iso()),
             )
-            return int(cur.lastrowid)
+            return new_id
 
     def list_facts(self, limit: int = 50) -> list[str]:
         with self._conn() as c:
@@ -339,11 +358,12 @@ class Memory:
 
     def save_event(self, text: str) -> int:
         with self._conn() as c:
-            cur = c.execute(
-                "INSERT INTO events(chat_id, text, created_at) VALUES(?,?,?)",
-                (self.chat_id, text, _now_iso()),
+            new_id = self._next_free_id(c, "events")
+            c.execute(
+                "INSERT INTO events(id, chat_id, text, created_at) VALUES(?,?,?,?)",
+                (new_id, self.chat_id, text, _now_iso()),
             )
-            return int(cur.lastrowid)
+            return new_id
 
     def recent_events(self, days: int = 7, limit: int = 50) -> list[dict]:
         """Events from the last `days` days, newest first."""
