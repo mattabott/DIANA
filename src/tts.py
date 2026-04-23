@@ -33,6 +33,13 @@ def _get_voice() -> PiperVoice:
     """Load the Piper voice once (singleton). Path resolved from .env."""
     global _voice
     if _voice is None:
+        if not CONFIG.tts_voice_model:
+            raise RuntimeError(
+                "TTS_VOICE_MODEL is not set. Pick a voice from "
+                "https://huggingface.co/rhasspy/piper-voices , drop the "
+                ".onnx + .onnx.json in data/voices/, and set TTS_VOICE_MODEL "
+                "in .env to the .onnx filename."
+            )
         model_path = _VOICE_DIR / CONFIG.tts_voice_model
         if not model_path.exists():
             raise RuntimeError(

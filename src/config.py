@@ -79,5 +79,5 @@ CONFIG = Config(
     voice_enabled=_bool("VOICE_ENABLED", False),
     voice_probability=_int("VOICE_PROBABILITY", 40),
     voice_max_chars=_int("VOICE_MAX_CHARS", 400),
-    tts_voice_model=os.getenv("TTS_VOICE_MODEL", "en_US-amy-medium.onnx"),
+    tts_voice_model=os.getenv("TTS_VOICE_MODEL", ""),
 )

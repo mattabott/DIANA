@@ -34,6 +34,7 @@ Personal **single-user** Telegram bot powered by a local LLM (Ollama), with a fu
   - **Context-aware**: if the bot just mentioned a photo and you insist ("go on, send it"), it triggers
   - **Autonomous**: N% of autonomous ticks become spontaneous photos
 - **Explicit mode** on/off: a flag in the YAML enables/disables NSFW language and prompts
+- **Voice messages (optional)**: a % of text replies can be synthesized into Telegram voice messages via [Piper TTS](https://github.com/rhasspy/piper) — fully local CPU, any language supported by Piper
 - **systemd deployment** ready (`deploy/diana-bot.service`)
 
 ## Architecture
@@ -212,6 +213,39 @@ In `.env`:
 In `persona.yaml`:
 - `identity.visual_prompt_prefix`: English description of the subject (**always adult**: use `adult`, `26 year old`, etc. **NEVER** `young/teen/youthful` — even as negatives they trigger Horde CSAM filter)
 - `identity.visual_shot_types`: random composition patterns (selfie / mirror / etc.)
+
+### Voice messages (optional TTS)
+The bot can reply with a Telegram **voice message** (waveform + inline playback) for a configurable % of text replies. Fully local, no cloud.
+
+**Prerequisites:**
+- `ffmpeg` installed on the host (used to encode OGG Opus): `sudo apt install ffmpeg`
+- A Piper voice model — pick a language matching your persona:
+  - English US female: `en_US-amy-medium`
+  - English GB female: `en_GB-alba-medium`
+  - Italian female: `it_IT-paola-medium`
+  - Spanish female: `es_ES-sharvard-medium`
+  - German: `de_DE-thorsten-medium`
+  - French female: `fr_FR-siwis-medium`
+  - See the full catalog at https://huggingface.co/rhasspy/piper-voices
+
+**Setup:**
+```bash
+mkdir -p data/voices
+cd data/voices
+# example: English US female voice
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json
+```
+
+Then in `.env`:
+```
+VOICE_ENABLED=true
+TTS_VOICE_MODEL=en_US-amy-medium.onnx
+VOICE_PROBABILITY=40     # % of replies sent as voice
+VOICE_MAX_CHARS=400      # longer replies stay as text
+```
+
+Latency on a Raspberry Pi 5 CPU-only: ~0.5-1s extra per voice reply.
 
 ### Memory
 - **Facts** (durable): inserted via `/fact` or auto-extracted by the LLM after each user message
