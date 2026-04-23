@@ -31,6 +31,12 @@ class HordeError(Exception):
     pass
 
 
+class TaskDropped(HordeError):
+    """Horde dropped the task id (404 on check). Happens under heavy queue load
+    after long waits: the server garbage-collects stale tasks. Safe to resubmit."""
+    pass
+
+
 class CensorshipDetected(HordeError):
     """Horde applied its CSAM post-filter and returned a censorship banner
     instead of the generated photo. The returned image is typically much
@@ -135,6 +141,8 @@ async def _wait_for_done(client: httpx.AsyncClient, task_id: str, max_wait_s: fl
             headers={"Client-Agent": CLIENT_AGENT},
             timeout=20.0,
         )
+        if r.status_code == 404:
+            raise TaskDropped(f"task {task_id} dropped by horde: {r.text[:200]}")
         if r.status_code != 200:
             raise HordeError(f"check failed: {r.status_code} {r.text[:200]}")
         data = r.json()
@@ -229,10 +237,17 @@ async def generate_image(
         payload["source_image"] = source_image_b64
         payload["source_processing"] = "img2img"
 
-    async with httpx.AsyncClient() as client:
+    async def _run(client: httpx.AsyncClient) -> str:
         task_id = await _submit(client, payload)
         await _wait_for_done(client, task_id, max_wait_s=max_wait_s)
-        url = await _fetch_result_url(client, task_id)
+        return await _fetch_result_url(client, task_id)
+
+    async with httpx.AsyncClient() as client:
+        try:
+            url = await _run(client)
+        except TaskDropped as e:
+            log.warning("horde dropped task, resubmitting once: %s", e)
+            url = await _run(client)
         log.info("horde result URL: %s", url)
         r = await client.get(url, timeout=60.0)
         if r.status_code != 200:
