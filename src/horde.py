@@ -114,7 +114,8 @@ async def _submit(client: httpx.AsyncClient, payload: dict) -> str:
                 },
                 timeout=60.0,
             )
-        except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout, httpx.NetworkError) as e:
+        except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout,
+                httpx.NetworkError, httpx.ConnectError, httpx.RemoteProtocolError) as e:
             last_exc = e
             backoff = 3 * (attempt + 1)
             log.warning("horde submit network error (%s), retrying in %ds", type(e).__name__, backoff)
@@ -136,11 +137,22 @@ async def _wait_for_done(client: httpx.AsyncClient, task_id: str, max_wait_s: fl
     elapsed = 0.0
     last_log = 0.0
     while elapsed < max_wait_s:
-        r = await client.get(
-            f"{API_BASE}/generate/check/{task_id}",
-            headers={"Client-Agent": CLIENT_AGENT},
-            timeout=20.0,
-        )
+        try:
+            r = await client.get(
+                f"{API_BASE}/generate/check/{task_id}",
+                headers={"Client-Agent": CLIENT_AGENT},
+                timeout=20.0,
+            )
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout,
+                httpx.NetworkError, httpx.RemoteProtocolError) as e:
+            # Transient network glitch (DNS, dropped connection, etc.): don't
+            # kill the flow, retry on next tick. The overall max_wait_s
+            # budget keeps ticking normally.
+            log.warning("network glitch polling horde (%s: %s), continuing",
+                        type(e).__name__, str(e)[:120])
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+            continue
         if r.status_code == 404:
             raise TaskDropped(f"task {task_id} dropped by horde: {r.text[:200]}")
         if r.status_code != 200:
