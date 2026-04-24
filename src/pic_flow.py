@@ -53,13 +53,26 @@ PHOTO_REQUEST_PATTERNS = [
     r"\bcan\s+you\s+send\s+.{0,25}?(photo|picture|pic|selfie)\b",
     r"\bcould\s+you\s+send\s+.{0,25}?(photo|picture|pic|selfie)\b",
     r"\ba\s+selfie\b",
-    r"\b(your|a)\s+(photo|picture|pic|selfie)\b",
+    r"\byour\s+(photo|picture|pic|selfie)\b",
     r"\b(photo|pic)\s+of\s+you\b",
     r"\bpic\s+(please|pls)\b",
     r"\bwould\s+love\s+.{0,20}?(photo|picture|pic|selfie)\b",
 ]
 
+# Phrases where the USER is OFFERING a photo (not asking for one). If any of
+# these match, cancel the trigger. Example: "wanna photo of my cock?" — bot
+# shouldn't interpret that as a request for itself.
+PHOTO_NEGATIVE_PATTERNS = [
+    r"\b(photo|picture|pic)\s+of\s+(my|mine|me)\b",
+    r"\b(wanna|want\s+a|want\s+to\s+see)\s+.{0,15}?(photo|picture|pic|selfie)\b",
+    r"\bi'?ll\s+send\s+.{0,15}?(photo|picture|pic|selfie)\b",
+    r"\blet\s+me\s+show\s+you\s+(my|mine)\b",
+    r"\bmy\s+(photo|picture|pic|selfie)\b",
+    r"\bcheck\s+(out\s+)?this\s+(photo|pic)\b",
+]
+
 _COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in PHOTO_REQUEST_PATTERNS]
+_COMPILED_NEGATIVE = [re.compile(p, re.IGNORECASE) for p in PHOTO_NEGATIVE_PATTERNS]
 
 
 # Words indicating the ASSISTANT (bot) just mentioned a photo.
@@ -86,6 +99,9 @@ def is_photo_request(text: str) -> bool:
     if not text:
         return False
     low = text.lower()
+    # If the message matches a "user is offering" form, it's not a request.
+    if any(p.search(low) for p in _COMPILED_NEGATIVE):
+        return False
     return any(p.search(low) for p in _COMPILED_PATTERNS)
 
 
