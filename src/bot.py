@@ -681,6 +681,62 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await msg.reply_text(f"✓ event added: {text}")
         return
 
+    await _process_user_message(update, context, user_text, amem)
+
+
+async def on_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Receive a Telegram voice message, transcribe it with whisper, and pass
+    the text through the same flow as on_text. Photo regexes, agent reply,
+    memory, intimacy, etc. all just work on voice input."""
+    if not _authorized(update):
+        return
+    if not CONFIG.stt_enabled:
+        await update.message.reply_text(
+            "hey, I can't process audio yet. could you write it instead?"
+        )
+        return
+    msg = update.message
+    voice = msg.voice
+    if voice is None:
+        return
+    log.info("VOICE from chat_id=%s: file_id=%s duration=%ds size=%dB",
+             msg.chat_id, voice.file_id, voice.duration or 0, voice.file_size or 0)
+
+    # typing/recording indicator while transcribing (5-30s on Pi)
+    stop = asyncio.Event()
+    typing_task = asyncio.create_task(_keepalive_typing(context.bot, msg.chat_id, stop))
+    try:
+        try:
+            tg_file = await voice.get_file()
+            ogg_bytes = bytes(await tg_file.download_as_bytearray())
+            from src.stt import transcribe_voice  # lazy: skip load if disabled
+            user_text = (await transcribe_voice(ogg_bytes)).strip()
+        except Exception:
+            log.exception("STT failed")
+            await msg.reply_text("hmm I didn't quite catch that, can you try again?")
+            return
+    finally:
+        stop.set()
+        await typing_task
+
+    if not user_text:
+        await msg.reply_text("I didn't hear anything, try again?")
+        return
+    log.info("VOICE transcribed (%d chars): %s", len(user_text), user_text)
+
+    amem = _get_memory(context)
+    await _process_user_message(update, context, user_text, amem)
+
+
+async def _process_user_message(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    user_text: str,
+    amem: AsyncMemory,
+) -> None:
+    """Shared text/voice flow: photo intent detection + agent reply + send."""
+    msg = update.message
+
     # Photo intent detection: two paths
     #   a) direct regex on the message ("send me a photo...")
     #   b) hybrid: bot's last message mentioned a photo + user insists
@@ -956,6 +1012,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("clearref", on_clearref_cmd))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_handler(MessageHandler(filters.PHOTO, on_photo))
+    app.add_handler(MessageHandler(filters.VOICE, on_voice))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     app.add_handler(MessageHandler(filters.ALL, on_any))
 
