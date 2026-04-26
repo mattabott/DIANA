@@ -10,6 +10,8 @@ HuggingFace, cached under ~/.cache/huggingface/hub/).
 from __future__ import annotations
 
 import asyncio
+import ctypes
+import ctypes.util
 import gc
 import logging
 import subprocess
@@ -23,6 +25,27 @@ from src.config import CONFIG
 
 
 log = logging.getLogger("diana-bot.stt")
+
+
+# malloc_trim(0): force glibc to return free arena pages to the kernel.
+# Without it, after `del model + gc.collect()` Python releases the objects
+# but the pages stay "reserved" — Ollama then sees less available RAM and
+# may refuse to (re)load the chat model. Linux glibc only (Pi 5 included).
+try:
+    _libc = ctypes.CDLL(ctypes.util.find_library("c") or "libc.so.6")
+    _libc.malloc_trim.argtypes = [ctypes.c_size_t]
+    _libc.malloc_trim.restype = ctypes.c_int
+except Exception:
+    _libc = None
+
+
+def _release_memory_to_kernel() -> None:
+    gc.collect()
+    if _libc is not None:
+        try:
+            _libc.malloc_trim(0)
+        except Exception:
+            pass
 
 
 def _new_model() -> WhisperModel:
@@ -78,7 +101,7 @@ def _transcribe_blocking(wav_bytes: bytes) -> str:
         return text
     finally:
         del model
-        gc.collect()
+        _release_memory_to_kernel()
 
 
 async def transcribe_voice(ogg_bytes: bytes) -> str:
