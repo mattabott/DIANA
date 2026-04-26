@@ -51,6 +51,9 @@ class Config:
     voice_probability: int
     voice_max_chars: int
     tts_voice_model: str
+    stt_enabled: bool
+    stt_model: str
+    stt_language: str
 
 
 CONFIG = Config(
@@ -80,4 +83,7 @@ CONFIG = Config(
     voice_probability=_int("VOICE_PROBABILITY", 40),
     voice_max_chars=_int("VOICE_MAX_CHARS", 400),
     tts_voice_model=os.getenv("TTS_VOICE_MODEL", ""),
+    stt_enabled=_bool("STT_ENABLED", False),
+    stt_model=os.getenv("STT_MODEL", "small"),
+    stt_language=os.getenv("STT_LANGUAGE", ""),
 )
