@@ -42,7 +42,13 @@ def get_agent() -> Any:
             base_url=CONFIG.ollama_host,
             reasoning=False,
             temperature=0.8,
-            num_ctx=8192,
+            # num_ctx=4096: with 8192 the KV cache on qwen3.5:4b asks for
+            # 5.5 GiB and on a Pi 5 8GB we're right at the edge — any small
+            # extra RAM pressure (pic_flow, voice transcription, etc.)
+            # triggers OOM on the next /chat. 4096 -> ~4.2 GiB, healthy
+            # margin. The default HISTORY_WINDOW=6 + system prompt fits
+            # comfortably within 4096 tokens.
+            num_ctx=4096,
             num_predict=150,
             keep_alive=CONFIG.ollama_keep_alive,
         )
