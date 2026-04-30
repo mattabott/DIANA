@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, BaseMessage
@@ -239,12 +240,28 @@ async def extract_facts(user_text: str, timeout_s: float = 90.0) -> list[str]:
     if not text or text.upper().startswith("NONE"):
         return []
     # Split by line and clean up.
+    # Some small LLMs paraphrase the refusal in natural language instead of
+    # answering "NONE" — those lines must NOT be saved as facts. Filter out
+    # common meta-refusal patterns (English + likely cross-language drift).
+    META_REFUSAL = re.compile(
+        r"\bno\s+(personal\s+)?(facts?|info)\b|"
+        r"\bnothing\s+(personal|to\s+extract|relevant)\b|"
+        r"\bno\s+relevant\s+(facts?|info)\b|"
+        r"\bnot\s+(a\s+)?relevant\b|"
+        r"\bcannot\s+extract\b|"
+        # Italian/Spanish drift safety net (small models occasionally switch)
+        r"non\s+c['’]è|nessun\s+fatto|fatto\s+personale|nulla\s+da",
+        re.IGNORECASE,
+    )
     facts: list[str] = []
     for line in text.split("\n"):
         line = line.strip().lstrip("-*•").strip()
         if not line or line.upper() == "NONE":
             continue
         if len(line) < 5 or len(line) > 200:
+            continue
+        if META_REFUSAL.search(line):
+            log.info("fact extraction: skipping meta-refusal line: %r", line[:80])
             continue
         facts.append(line)
     return facts
