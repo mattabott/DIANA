@@ -208,7 +208,11 @@ def _get_extract_llm() -> ChatOllama:
             base_url=CONFIG.ollama_host,
             reasoning=False,
             temperature=0.2,
-            num_ctx=2048,
+            # Same num_ctx as the chat agent (4096): different num_ctx
+            # values force Ollama to unload+reload qwen on every switch,
+            # and on a Pi 5 8GB the reload window goes OOM. Same value
+            # = shared instance, no reload.
+            num_ctx=4096,
             num_predict=120,
             keep_alive=CONFIG.ollama_keep_alive,
         )
