@@ -791,6 +791,7 @@ async def _process_user_message(
 
     stop = asyncio.Event()
     typing_task = asyncio.create_task(_keepalive_typing(context.bot, msg.chat_id, stop))
+    reply_is_fallback = False
     try:
         reply = await asyncio.wait_for(
             generate_reply(
@@ -807,9 +808,11 @@ async def _process_user_message(
     except asyncio.TimeoutError:
         log.error("Agent timeout after 900s")
         reply = "mmh sorry, I got distracted... what were you saying?"
+        reply_is_fallback = True
     except Exception:
         log.exception("Agent error")
         reply = "mmh I'm a bit out of it, try again"
+        reply_is_fallback = True
     finally:
         stop.set()
         await typing_task
@@ -834,9 +837,14 @@ async def _process_user_message(
     if not sent_voice:
         await msg.reply_text(reply)
 
-    # Save the exchange AFTER sending (if send fails, better not to memorize).
+    # If the reply was a fallback (timeout/exception), do NOT save it to
+    # history: otherwise the model would see it in subsequent turns and
+    # imitate it as the character's natural style ("mmh I'm a bit out of
+    # it, try again" forever). We still save the user message and bump
+    # the interaction counter.
     await amem.save_message("user", user_text)
-    await amem.save_message("assistant", reply)
+    if not reply_is_fallback:
+        await amem.save_message("assistant", reply)
     await amem.increment_interaction()
     # Fire-and-forget fact extraction in background: does not block chat.
     asyncio.create_task(_background_extract_facts(user_text, amem))
